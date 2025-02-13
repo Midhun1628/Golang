@@ -1,48 +1,26 @@
 package main
 
-import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"time"
-)
+import "fmt"
 
+type Personal struct{
+	name string
+	age int
+}
 
-type Message struct {
-	Greeting string `json:"greetings"`
+var Per1 Personal
+var Per2 Personal
+
+func main(){
+	Per1.name="Midhun"
+	Per1.age=12
+	Per2.name="Midhunn"
+	Per2.age=13
+
+fmt.Print("Name : " ,Per1.name)
+fmt.Print(" Age : " ,Per1.age)
+fmt.Print(" Name :" ,Per2.name)
+fmt.Print("age : " ,Per2.age)
+
 
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-
-	currentHour := time.Now().Hour()
-
-	var greetingss string
-	if currentHour < 12 {
-		greetingss = "Good Morning"
-	} else {
-		greetingss = "Good Afternoon"
-	}
-
-message := Message{Greeting: greetingss}
-
-	
-	jsonMessage, err := json.Marshal(message)
-	if err != nil {
-		http.Error(w, "Error generating JSON", http.StatusInternalServerError)
-		return
-	}
-
-	
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonMessage)
-}
-
-func main() {
-	
-	http.HandleFunc("/", handler)
-
-	fmt.Println("Server is running at 3000")
-	http.ListenAndServe(":3000", nil)
-}
