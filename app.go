@@ -1,63 +1,72 @@
 package main
 
-import (
-	"database/sql"
-	"fmt"
-	"net/http"
+import(
+   "net/http"
+   "database/sql"
+   "fmt"
+   "encoding/json"
+   "log"
 _ "github.com/go-sql-driver/mysql"
+
 )
+var db *sql.DB 
 
-
-func display(w http.ResponseWriter,r * http.Request){
-
-	
-	fmt.Fprint(w," data is sucessfully displayed on terminal")
+type User struct{
+    ID int      `json:"id"`
+    NAME string `json:"name"`
+    AGE  int    `json:"age"`
 }
 
 
-func main() {
-	
-	// create a database object which can be used
-	// to connect with database.
-	db, err := sql.Open("mysql", "root:qweasdzxc1@tcp(0.0.0.0:3306)/customer")
-	
-if err !=nil{
-	panic(err)
-}
+func Display(w http.ResponseWriter,r *http.Request){
 
-err = db.Ping()
+    var err error
 
-if err!=nil{
-	panic(err)
-}
+    result,err:=db.Query("Select id,name,age from users")
+    
+    if err  !=nil{
+        log.Fatal("Failed to fetch data",err)    
+        http.Error(w,"Internal server error",http.StatusInternalServerError)
 
-result,err:=db.Query("select * from users")
+    }
+     defer result.Close()
 
-if err !=nil{
-	panic(err)	
-}
+     var users []User
+    
+    for result.Next(){
+        var user User
+        err:=result.Scan(&user.ID,&user.NAME,&user.AGE)
+        if err!=nil{
+            log.Fatal("Failed to scan data",err)      
+            http.Error(w,"Failed to scan data",http.StatusInternalServerError)
+        }
+        users=append(users,user)
+        }
+        w.Header().Set("Content-Type","application/json")
+        json.NewEncoder(w).Encode(users)
+    
+    }
+    func main(){ 
 
-for result.Next(){
+var err error
 
-	
-	var id int 
-	var name string
-	var age  int
+        db,err=sql.Open("mysql","root:qweasdzxc1@tcp(0.0.0.0:3306)/customer")
+    
+        if err !=nil{
+            panic(err)
+        }
+        
+        err= db.Ping()
+        
+        if err!=nil{
+            log.Fatal("Connecting to db failed",err)
+        }
 
-	err= result.Scan(&id,&name,&age)
-
-	if err !=nil{
-		panic(err)
-	}
-
-fmt.Printf("id: %d ,name: %s,age: %d \n",id,name,age )
-	
-	
-}
-
-http.HandleFunc("/",display)
-fmt.Print("Server is running on 3000")
-http.ListenAndServe(":3000",nil)
-
-
-}
+        fmt.Println("Database connected")        
+        defer db.Close()
+        
+        http.HandleFunc("/",Display)
+        fmt.Println("Sever is running in 3000 port")
+        http.ListenAndServe(":3000",nil)
+        
+    }
