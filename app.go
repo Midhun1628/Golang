@@ -13,15 +13,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const mongoURI ="mongodb+srv://user:qweasdzxc1@cluster0.gfhon.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
-type User struct {
-	ID   string `json:"id" bson:"id"`
-	Name string `json:"name" bson:"name"`
-	Age  string `json:"age" bson:"age"`
+// MongoDB connection URI
+const mongoURI = "mongodb://localhost:27017"
+// Define a struct for user credentials
+type Credentials struct {
+	Username string `json:"username" bson:"username"`
+	Password string `json:"password" bson:"password"`
 }
 
-// Connect to MongoDB Atlas
+// Function to connect to MongoDB
 func connectDB() (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(mongoURI)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -34,9 +34,22 @@ func connectDB() (*mongo.Client, error) {
 	return client, nil
 }
 
-// Fetch users from MongoDB Atlas
-func getUsers(w http.ResponseWriter, r *http.Request) {
-	// Connect to MongoDB Atlas
+// Function to check login credentials
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Decode incoming JSON request
+	var input Credentials
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
+		return
+	}
+
+	// Connect to MongoDB
 	client, err := connectDB()
 	if err != nil {
 		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
@@ -45,49 +58,31 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Disconnect(context.Background())
 
-	// Access the "customer" database and "users" collection
-	collection := client.Database("customer").Collection("users")
+	// Access database and collection
+	collection := client.Database("userdata").Collection("credentials")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Fetch all documents
-	cursor, err := collection.Find(ctx, bson.M{})
-	if err != nil {
-		http.Error(w, "Failed to retrieve data", http.StatusInternalServerError)
-		log.Println("Error fetching data:", err)
-		return
-	}
-	defer cursor.Close(ctx)
+	// Search for matching credentials in MongoDB
+	var user Credentials
+	err = collection.FindOne(ctx, bson.M{"username": input.Username, "password": input.Password}).Decode(&user)
 
-	var users []User
-	for cursor.Next(ctx) {
-		var user User
-		if err := cursor.Decode(&user); err != nil {
-			log.Println("Error decoding user:", err)
-			continue
-		}
-		users = append(users, user)
-	}
-
-	// If no users found
-	if len(users) == 0 {
-		log.Println("No users found in the collection")
-	}
-
-	// Log users for debugging
-	log.Println("Fetched users:", users)
-
-	// Convert users to JSON and send the response
+	// Prepare response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(users); err != nil {
-		log.Println("Error encoding JSON:", err)
-		http.Error(w, "Error encoding data to JSON", http.StatusInternalServerError)
+	if err != nil {
+		// If credentials are not found
+		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid credentials"})
+	} else {
+		// If credentials exist
+		json.NewEncoder(w).Encode(map[string]string{"message": "User logged in successfully"})
 	}
 }
 
-
 func main() {
-	http.HandleFunc("/", getUsers)
+	// Define login API endpoint
+	http.HandleFunc("/", loginHandler)
+
+	// Start server
 	fmt.Println("Server is running on http://localhost:3000")
 	log.Fatal(http.ListenAndServe(":3000", nil))
 }
